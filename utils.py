@@ -7,7 +7,7 @@ import pyperclip as clp
 import pyautogui
 import time
 
-
+"""
 wb = xl.load_workbook('data/email_list.xlsx')
 ws = wb.active
 lst = []
@@ -43,9 +43,9 @@ for i in lst:
     time.sleep(1)
     pyautogui.hotkey('tab')
     clp.copy(
-    f"""
+    f"
     {i[1]}님, 수고하셨습니다.
-    """)
+    ")
     pyautogui.hotkey('ctrl', 'v')
     time.sleep(1)
     
@@ -58,3 +58,4 @@ for i in lst:
     send_btn_center = pyautogui.center(send_btn_location)
     pyautogui.click(send_btn_center[0], send_btn_center[1])
     time.sleep(3)
+"""
