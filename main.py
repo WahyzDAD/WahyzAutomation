@@ -19,8 +19,10 @@ from PyQt5.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QFileDialog,
+    QScrollArea,
+    QTableView,
 )
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot,  QRunnable, QThreadPool, QObject
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRunnable, QThreadPool, QObject, QSortFilterProxyModel
 import pandas as pd
 
 import openpyxl as xl
@@ -28,6 +30,9 @@ from openpyxl import Workbook, load_workbook
 import pyperclip as clp
 import pyautogui
 import time
+
+import models
+from models import MyTableModel
 
 
 class WindowClass(QMainWindow):
@@ -52,8 +57,11 @@ class WindowClass(QMainWindow):
         
         self.mailListLabel = QLabel()
         self.mailListLabel.setStyleSheet("border: 1px solid black;")
-        self.mailListLabel.setFixedHeight(100)
-
+        # self.mailListLabel.setFixedHeight(100)
+        
+        # Set up the view
+        self.tableView = QTableView()
+        
         self.messages = QLabel()
         self.messages.setStyleSheet("border: 1px solid black;")
         self.messages.setFixedHeight(100)
@@ -88,7 +96,11 @@ class WindowClass(QMainWindow):
         layout.addRow(QLabel("Number From"), self.lineEdit_From)
         layout.addRow(QLabel("Number To"), self.lineEdit_To)
         layout.addRow(QLabel("Preview Mail List"), self.btn_previewMailList)
+    
+        # self.scrollAreaforMailList.setWidget(layout.addRow(QLabel("Mail List"), self.mailListLabel))
         layout.addRow(QLabel("Mail List"), self.mailListLabel)
+        layout.addRow(self.tableView)
+        
         layout.addRow(QLabel("Messages"), self.messages)
         layout.addRow(QLabel("Select PDF Folder"), self.btn_SelectPDFFolder)
         layout.addRow(QLabel("Selected PDF Folder"), self.lineEdit_SelectedFolder)
@@ -134,6 +146,35 @@ class WindowClass(QMainWindow):
         
         assert self.number_from <= self.number_to
 
+    def set_model_to_view(self, df: pd.DataFrame):
+        """
+        Set Model to View.
+        """
+        # Set up the model
+        # self.model = QSqlTableModel(self)
+        self.model = MyTableModel(df)
+        self.proxy_model = QSortFilterProxyModel()
+        self.proxy_model.setSourceModel(self.model)
+        
+        
+        self.model.setTable("E-Mail List")
+        self.model.setEditStrategy(models.QSqlTableModel.OnFieldChange)
+        
+        self.model.setHeaderData(-1, Qt.Horizontal, "No.")
+        self.model.setHeaderData(0, Qt.Horizontal, "ID")
+        self.model.setHeaderData(1, Qt.Horizontal, "Name")
+        self.model.setHeaderData(2, Qt.Horizontal, "E-Mail")
+        self.model.select()
+        
+        # Set up the view
+        # self.tableView = QTableView()
+        
+        # self.tableView.setModel(self.model)
+        self.tableView.setModel(self.proxy_model)
+        self.tableView.setSortingEnabled(True)
+        self.tableView.resizeColumnsToContents()
+        # self.setCentralWidget(self.tableView)
+
     
     def preview_mail_list(self):
         self.email_list = []
@@ -166,14 +207,18 @@ From {self.number_from} To {self.number_to}
 # From {self.number_from} To {self.number_to}
 # {self.email_list}
 #                 """)
+            self.message_list.append(f"Worked well.")
         except AssertionError:
             self.message_list.append(f"The number for 'To' must be greater than or equal to 'From'")
             # self.messages.setText(f"The number for 'To' must be greater than or equal to 'From'")
         except:
             self.message_list.append(f"Set From, To")
             # self.messages.setText(f"Set From, To")
+        
         self.messages.setText(str(self.message_list))
         self.message_list = []
+        
+        self.set_model_to_view(self.df)
     
     def select_pdf_folder(self):
         self.selected_folderpath = QFileDialog.getExistingDirectory(self, 'Select Folder')
@@ -183,7 +228,7 @@ From {self.number_from} To {self.number_to}
         dirname = os.path.dirname(os.path.abspath(__file__))
         write_btn_rel_path = 'data\\write_mail.jpg'
         send_btn_rel_path = 'data\\btn_send.jpg'
-        attach_btn_rel_path = 'data\\btn_send.jpg'
+        attach_btn_rel_path = 'data\\btn_attach.jpg'
         write_btn_path = os.path.join(dirname, write_btn_rel_path)
         send_btn_path = os.path.join(dirname, send_btn_rel_path)
         attach_btn_path = os.path.join(dirname, attach_btn_rel_path)
@@ -192,57 +237,68 @@ From {self.number_from} To {self.number_to}
         
         for i in self.email_list:
             write_btn_location = pyautogui.locateOnScreen(write_btn_path, confidence = 0.8)
-            print(write_btn_location)
+            print(f"write_btn_location: {write_btn_location}")
             write_btn_center = pyautogui.center(write_btn_location)
             pyautogui.click(write_btn_center[0], write_btn_center[1])
-            time.sleep(1)
-            clp.copy(i[-1])
+            time.sleep(3)
+            clp.copy(i[-1]) # email address
             pyautogui.hotkey('ctrl', 'v')
-            time.sleep(1)
+            time.sleep(3)
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
-            clp.copy(f"{i[1]} 급여명세서 발송 테스트.")
+            clp.copy(f"{self.year}년 {self.month}월 급여명세서 발송 테스트.") # name
             pyautogui.hotkey('ctrl', 'v')
             time.sleep(1)
             pyautogui.hotkey('tab')
             clp.copy(
             f'''
-            {i[1]}님, 수고하셨습니다.
+{i[2]}님, 수고하셨습니다.
             ''')
             pyautogui.hotkey('ctrl', 'v')
-            time.sleep(1)
+            time.sleep(3)
             
             attach_btn_location = pyautogui.locateOnScreen(attach_btn_path, confidence = 0.8)
             attach_btn_center = pyautogui.center(attach_btn_location)
             pyautogui.click(attach_btn_center[0], attach_btn_center[1])
-            time.sleep(1)
+            time.sleep(3)
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
             pyautogui.hotkey('enter')
+            time.sleep(3)
             clp.copy(self.selected_folderpath)
             pyautogui.hotkey('ctrl', 'v')
             pyautogui.hotkey('enter')
+            time.sleep(3)
             pyautogui.hotkey('tab')
+            time.sleep(1)
             pyautogui.hotkey('tab')
+            time.sleep(1)
             pyautogui.hotkey('tab')
+            time.sleep(1)
             pyautogui.hotkey('tab')
+            time.sleep(1)
             pyautogui.hotkey('tab')
+            time.sleep(1)
             pyautogui.hotkey('tab')
-            clp.copy(f"PDF 파일 이름") ##### email_list.xlsx에 기록하고 활용할 것
+            time.sleep(3)
+            
+            clp.copy(f"{i[1]}.{i[2]}.pdf") ##### id.name.pdf
+            print(f"{i[1]}.{i[2]}.pdf copied")
             pyautogui.hotkey('ctrl', 'v')
             pyautogui.hotkey('tab')
-            pyautogui.hotkey('tab')
+            pyautogui.hotkey('tab')     
+            
             pyautogui.hotkey('enter')
-            time.sleep(1)
+            time.sleep(3)
             
             send_btn_location = pyautogui.locateOnScreen(send_btn_path, confidence = 0.8)
-            print(send_btn_location)
+            print(f"send_btn_location: {send_btn_location}")
             send_btn_center = pyautogui.center(send_btn_location)
             pyautogui.click(send_btn_center[0], send_btn_center[1])
-            time.sleep(3)
+            time.sleep(10)
         
 
 if __name__ == "__main__":
