@@ -246,14 +246,14 @@ From {self.number_from} To {self.number_to}
             time.sleep(3)
             pyautogui.hotkey('tab')
             pyautogui.hotkey('tab')
-            clp.copy(f"{self.year}년 {self.month}월 급여명세서 발송 테스트.") # name
+            clp.copy(f"{self.year}년 {self.month}월 급여명세서") # name
             pyautogui.hotkey('ctrl', 'v')
             time.sleep(1)
             pyautogui.hotkey('tab')
             clp.copy(
             f'''
-{i[2]}님, 수고하셨습니다.
-            ''')
+수고하셨습니다.
+''')
             pyautogui.hotkey('ctrl', 'v')
             time.sleep(3)
             
