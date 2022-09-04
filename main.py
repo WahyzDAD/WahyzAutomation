@@ -21,6 +21,8 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QScrollArea,
     QTableView,
+    QHBoxLayout,
+    QVBoxLayout,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRunnable, QThreadPool, QObject, QSortFilterProxyModel
 import pandas as pd
@@ -33,14 +35,32 @@ import time
 
 import models
 from models import MyTableModel
+import salarySpecDM as win32model
 
 
 class WindowClass(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.excel = win32model.initExcel()
+        self.excel.Visible = True
         
+        # Left Layout Components
+        self.btn_SelectSalaryFile = QPushButton("Select File")
+        self.btn_SelectSalaryFile.clicked.connect(self.select_salary_file)
         
-        # Buttons
+        self.lineEdit_SelectedSalaryFile = QLineEdit()
+        
+        self.btn_SaveDir = QPushButton("Select Saving Directory")
+        self.btn_SaveDir.clicked.connect(self.select_save_dir)
+        self.lineEdit_SaveDir = QLineEdit()
+        
+        self.salaryLineEdit_From = QLineEdit()
+        self.salaryLineEdit_To = QLineEdit()
+        
+        self.btn_MakePDFs = QPushButton("Make PDFs")
+        self.btn_MakePDFs.clicked.connect(self.make_salary_pdfs)
+        
+        # Right Layout Components
         self.btn_SelectFile = QPushButton("Select File")
         self.btn_SelectFile.clicked.connect(self.select_email_list_file)
         
@@ -86,43 +106,130 @@ class WindowClass(QMainWindow):
     def createForm(self):
         # creating a form layout
         widget = QWidget()
-        layout = QFormLayout(widget)
+        
+        outerLayout = QHBoxLayout(widget)
+        
+        leftLayout = QFormLayout()
         
         # adding rows
-        layout.addRow(QLabel("Select Email List File"), self.btn_SelectFile)
-        layout.addRow(QLabel("Selected Email List File"), self.lineEdit_SelectedFile)
-        layout.addRow(QLabel("Year"), self.lineEdit_Year)
-        layout.addRow(QLabel("Month"), self.lineEdit_Month)
-        layout.addRow(QLabel("Number From"), self.lineEdit_From)
-        layout.addRow(QLabel("Number To"), self.lineEdit_To)
-        layout.addRow(QLabel("Preview Mail List"), self.btn_previewMailList)
-    
-        # self.scrollAreaforMailList.setWidget(layout.addRow(QLabel("Mail List"), self.mailListLabel))
-        layout.addRow(QLabel("Mail List"), self.mailListLabel)
-        layout.addRow(self.tableView)
+        leftLayout.addRow(QLabel("Select Salary File"), self.btn_SelectSalaryFile)
+        leftLayout.addRow(QLabel("Selected Salary File"), self.lineEdit_SelectedSalaryFile)
+        leftLayout.addRow(QLabel("Select Saving Directory"), self.btn_SaveDir)
+        leftLayout.addRow(QLabel("Selected Saving Directory"), self.lineEdit_SaveDir)
+        leftLayout.addRow(QLabel("Number From"), self.salaryLineEdit_From)
+        leftLayout.addRow(QLabel("Number To"), self.salaryLineEdit_To)
+        leftLayout.addRow(QLabel("Make PDFs"), self.btn_MakePDFs)
         
-        layout.addRow(QLabel("Messages"), self.messages)
-        layout.addRow(QLabel("Select PDF Folder"), self.btn_SelectPDFFolder)
-        layout.addRow(QLabel("Selected PDF Folder"), self.lineEdit_SelectedFolder)
-        layout.addRow(QLabel("Get Ready Email Site"), self.ready_email_site)
-        layout.addRow(QLabel("Send Emails"), self.btn_sendEmails)
+        # rightLayout = QFormLayout(widget)
+        rightLayout = QFormLayout()
+        
+        # adding rows
+        rightLayout.addRow(QLabel("Select Email List File"), self.btn_SelectFile)
+        rightLayout.addRow(QLabel("Selected Email List File"), self.lineEdit_SelectedFile)
+        rightLayout.addRow(QLabel("Year"), self.lineEdit_Year)
+        rightLayout.addRow(QLabel("Month"), self.lineEdit_Month)
+        rightLayout.addRow(QLabel("Number From"), self.lineEdit_From)
+        rightLayout.addRow(QLabel("Number To"), self.lineEdit_To)
+        rightLayout.addRow(QLabel("Preview Mail List"), self.btn_previewMailList)
+    
+        # self.scrollAreaforMailList.setWidget(rightLayout.addRow(QLabel("Mail List"), self.mailListLabel))
+        # rightLayout.addRow(QLabel("Mail List"), self.mailListLabel)
+        rightLayout.addRow(QLabel("Mail List"))
+        rightLayout.addRow(self.tableView)
+        
+        rightLayout.addRow(QLabel("Messages"), self.messages)
+        rightLayout.addRow(QLabel("Select PDF Folder"), self.btn_SelectPDFFolder)
+        rightLayout.addRow(QLabel("Selected PDF Folder"), self.lineEdit_SelectedFolder)
+        rightLayout.addRow(QLabel("Get Ready Email Site"), self.ready_email_site)
+        rightLayout.addRow(QLabel("Send Emails"), self.btn_sendEmails)
+        
+        outerLayout.addLayout(leftLayout)
+        outerLayout.addLayout(rightLayout)
         
         self.setCentralWidget(widget)
         
-    def select_email_list_file(self):
+    def select_salary_file(self):
         """
         Click "Select File",
         Display Selected File,
         Open Workbook as self.wb
         """
         try:
+            filename = QFileDialog.getOpenFileName(self, 'Open file', './')
+            self.lineEdit_SelectedSalaryFile.setText(filename[0]) 
+            
+            self.salary_df = pd.read_excel(filename[0], index_col=0)
+            self.salary_wb = self.excel.Workbooks.Open(filename[0])
+            
+            # 각 시트를 변수에 할당
+            self.ws_basisTable = self.salary_wb.Worksheets("1.기본정보TABLE")
+            self.ws_ManagerSalary = self.salary_wb.Worksheets("급여명세표_관리")
+        
+        except Exception as e:
+            print(e)
+            
+    def select_save_dir(self):
+        dirname = QFileDialog.getExistingDirectory(self, 'Select Directory')
+        self.lineEdit_SaveDir.setText(dirname)
+        self.dirname = dirname      
+    
+    def get_salary_fromto(self):
+        """
+        엑셀 "1.기본정보TABLE"에서 급여명세표 pdf 변환을 할 사원 리스트의 
+        시작 행 번호부터 마지막 행 번호를
+        From #, To #에 각각 적고 그 값을 가져온다.
+        """
+        self.salary_number_from = int(self.salaryLineEdit_From.text())
+        self.salary_number_to = int(self.salaryLineEdit_To.text())  
+        
+    def make_salary_pdfs(self):
+        """
+        pdf 변환을 시작한다. 선택된 사원들에 대한 각각의 pdf가 생성된다.
+        """
+        self.get_salary_fromto()
+        self.ws_ManagerSalary.Select()
+        time.sleep(1)
+
+        # # 자동 필터된 범위
+        # rangeofInterest = ws_basisTable.Autofilter.Range.Address
+
+        # if rangeofInterest.Item("구분") == "관리" or "연구소":
+        #     pass
+
+        # 1~4 출력번호 반복문
+        for i in range(self.salary_number_from, self.salary_number_to+1):
+            # 출력 번호 2행1열에 입력
+            self.ws_ManagerSalary.Cells(3, 2).Value = self.ws_basisTable.Cells(i, 2).Value
+            # 3행2열 값을 name 변수에 저장
+            name = self.ws_ManagerSalary.Cells(3, 2).Value
+            # 사번 저장
+            idNumber = self.ws_ManagerSalary.Cells(3, 4).Value
+            if '(' in idNumber:
+                idNumber = idNumber.split("(")[0]
+                print(f"idNumber: {idNumber}")
+            # pdf 저장경로, 파일명
+            pdf_path = "{}\\{}.{}.pdf".format(self.dirname, int(idNumber), name)
+            # pdf 저장
+            self.salary_wb.ActiveSheet.ExportAsFixedFormat(0, pdf_path)
+            time.sleep(1)
+        
+        self.salary_wb.Close(False)  
+        self.excel.Quit()
+
+    def select_email_list_file(self):
+        """
+        Click "Select File",
+        Display Selected File,
+        Open Workbook as self.email_wb
+        """
+        try:
             filename = QFileDialog.getOpenFileName(self, 'Open file', './data')
             self.lineEdit_SelectedFile.setText(filename[0]) 
             
             self.df = pd.read_excel(filename[0], index_col=0)
-            self.wb = xl.load_workbook(filename = filename[0])
+            self.email_wb = xl.load_workbook(filename = filename[0])
             # 각 시트를 변수에 할당
-            self.ws = self.wb.active
+            self.email_ws = self.email_wb.active
         
         except Exception as e:
             print(e)
@@ -178,8 +285,8 @@ class WindowClass(QMainWindow):
     
     def preview_mail_list(self):
         self.email_list = []
-        for r in self.ws.rows:
-            print(f"r: {r}, ws.rows: {self.ws.rows}")
+        for r in self.email_ws.rows:
+            print(f"r: {r}, ws.rows: {self.email_ws.rows}")
             if r[0].value is None:
                 print(f"r[0]: {r[0]}, r[0].value: {r[0].value}")
                 continue
@@ -221,7 +328,7 @@ From {self.number_from} To {self.number_to}
         self.set_model_to_view(self.df)
     
     def select_pdf_folder(self):
-        self.selected_folderpath = QFileDialog.getExistingDirectory(self, 'Select Folder')
+        self.selected_folderpath = QFileDialog.getExistingDirectory(self, 'Select Directory')
         self.lineEdit_SelectedFolder.setText(self.selected_folderpath) 
     
     def send_emails(self):
